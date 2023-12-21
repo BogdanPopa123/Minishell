@@ -80,6 +80,7 @@ static void start_shell(void)
 		if (root != NULL)
 			ret = parse_command(root, 0, NULL);
 
+		// print("ret value in infinite loop: %d@\n")
 		free_parse_memory();
 		free(line);
 
