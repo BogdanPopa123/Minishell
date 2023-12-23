@@ -23,7 +23,9 @@
 /**
  * Internal change-directory command.
  */
-
+extern int original_stdin;
+extern int original_stdout;
+extern int original_stderr;
 
 static void manage_redirections(simple_command_t *s, char *stdin, char* stdout, char* stderr, 
 int *fd_in, int *fd_out, int *fd_err, int *fd_common_out) {
@@ -169,6 +171,9 @@ static bool shell_cd(word_t *dir)
 	}
 
 	free(arg_path);
+	// dup2(original_stdin, 0);
+	// dup2(original_stdout, 1);
+	// dup2(original_stderr, 2);
 	return return_value;
 
 }
@@ -206,7 +211,7 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 	char *input = get_word(s->in);
 	char *output = get_word(s->out);
 	char *err = get_word(s->err);
-	int fd_input = -1, fd_output = -1, fd_error = -1, fd_common_out_error = -1;
+	int fd_input = -1, fd_output = -1, fd_error = -1, fd_common_out_error = -1, child_exit_status = -1;
 
 	// printf("The given command is : @%s@\n", command);
 	// printf("The IO Flag is set to : @%d@\n", s->io_flags);
@@ -216,6 +221,9 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 
 	if (strcmp(command, "cd") == 0) {
 		manage_redirections(s, input, output, err, &fd_input, &fd_output, &fd_error, &fd_common_out_error);
+		// close(fd_input);
+		// close(fd_output);
+		// close(fd_error);
 		return shell_cd(s->params);
 	} else if (strcmp(command, "quit") == 0 || strcmp(command, "exit") == 0) {
 		// printf("@@@@@Entered exit/quit@@@@@\n");
@@ -258,9 +266,9 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 
 		int exec_result;
 		
-		// int original_stdin = dup(0);
-		// int origianl_stdout = dup(1);
-		// int original_stderr = dup(2);
+		// original_stdin = dup(0);
+		// original_stdout = dup(1);
+		// original_stderr = dup(2);
 
 		manage_redirections(s, input, output, err, &fd_input, &fd_output, &fd_error, &fd_common_out_error);
 		
@@ -273,6 +281,9 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 		free(input);
 		free(output);
 		free(err);
+		// close(fd_input);
+		// close(fd_output);
+		// close(fd_error);
 
 		exec_result = execvpe(command, argv, __environ);
 
@@ -280,7 +291,28 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 
 	} else if (pid > 0){
 		//inside parent process
-		waitpid(pid, NULL, 0);
+		waitpid(pid, &child_exit_status, 0);
+		
+		//free argv
+		int i;
+		for (i = 0; i < number_of_args; i ++){
+			free(argv[i]);
+		}
+		free(argv);
+		free(command);
+		free(input);
+		free(output);
+		free(err);
+
+		if (WIFEXITED(child_exit_status)) {
+			// printf ("The parse simple will return: @%d@\n", WEXITSTATUS(child_exit_status));
+			return WEXITSTATUS(child_exit_status);
+		}
+
+		return -1;
+		// dup2(original_stdin, 0);
+		// dup2(original_stdout, 1);
+		// dup2(original_stderr, 2);
 	}
 
 
@@ -304,9 +336,79 @@ static bool run_in_parallel(command_t *cmd1, command_t *cmd2, int level,
 static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 		command_t *father)
 {
-	/* TODO: Redirect the output of cmd1 to the input of cmd2. */
+	/* TODO: Redirect the output of cmd1 to the input of cmd2. este cazul | */  
 
-	return true; /* TODO: Replace with actual exit status. */
+	// File descriptorii pentru pipe
+	int pipe_fd[2]; 
+
+    int pid1, pid2; 
+    int status1, status2;
+
+	if (pipe(pipe_fd) == -1) {
+		// printf("Apelul pipe() a intors -1\n");
+		return false;
+	}
+
+	pid1 = fork();
+
+	if (pid1 == 0) {
+		//inside first child
+		close(pipe_fd[0]);
+
+		int dup2_first_res_pipe = dup2(pipe_fd[1], 1);
+		if (dup2_first_res_pipe < 0) {
+			exit(1);
+		}
+
+		int return_value = parse_command(cmd1, level + 1, father);
+		close(pipe_fd[1]);
+		exit(return_value);
+	} else {
+		//inside parent process
+
+		pid2 = fork();
+		if (pid2 == 0){
+			//inside second child (brother with p1)
+			close(pipe_fd[1]);
+
+			int dup2_second_res_pipe = dup2(pipe_fd[0], 0);
+
+			if (dup2_second_res_pipe < 0) {
+				exit(1);
+			}
+
+			int second_return_value = parse_command(cmd2, level + 1, father);
+			// printf ("IN SECOND CHILD FORK SECOND RET VAL IS: %d@@@@#$\n", second_return_value);
+			close(pipe_fd[0]);
+
+			exit(second_return_value);
+		} else {
+			//inside the parent
+			close(pipe_fd[0]);
+			close(pipe_fd[1]);
+			
+			waitpid(pid1, &status1, 0);
+			waitpid(pid2, &status2, 0);
+
+			// printf ("Status1 : %d   Status2:  %d @@\n", WEXITSTATUS(status1), WEXITSTATUS(status2));
+			//returnarea false adica zero ar inseamna ca exit codeul indica executia cu succes
+			//voi face ceea ce este invers, adica in loc de true returnez false si viceversa (contraintuitiv)
+			if (WIFEXITED(status2)) {
+				if (status2 == 0) {
+					// printf("PIPE WILL RETURN TRUE true:%d\n", true);
+					// return true;
+					return false; //ca sa am exit code 0 adica executie cu succes
+				} else {
+					// printf("PIPE WILL RETURN FALSE false:%d\n", false);
+					// return false;
+					return true; //ca sa am exit code 1 adica executie esuata
+				}
+			}
+			return false;
+		}
+	}
+
+	return status2; /* TODO: Replace with actual exit status. */
 }
 
 /**
@@ -320,9 +422,12 @@ int parse_command(command_t *c, int level, command_t *father)
 		return SHELL_EXIT;
 	}
 
+	int returned_value;
+
 	if (c->op == OP_NONE) {
 		/* TODO: Execute a simple command. */
-		// return parse_simple(c->scmd, level + 1, c); to decomment
+		// printf("ENTERED PARSE SIMPLE");
+		// return parse_simple(c->scmd, level + 1, c);
 
 		//debug start
 		int debug_value = parse_simple(c->scmd, level + 1, c);
@@ -335,6 +440,15 @@ int parse_command(command_t *c, int level, command_t *father)
 	switch (c->op) {
 	case OP_SEQUENTIAL:
 		/* TODO: Execute the commands one after the other. */
+		returned_value = parse_command(c->cmd1, level + 1, c);
+		int second_return_value = parse_command(c->cmd2, level + 1, c);
+
+		if (returned_value == 0 || second_return_value == 0) {
+			returned_value = 0;
+		} else {
+			returned_value = -1;
+		}
+
 		break;
 
 	case OP_PARALLEL:
@@ -343,25 +457,42 @@ int parse_command(command_t *c, int level, command_t *father)
 
 	case OP_CONDITIONAL_NZERO:
 		/* TODO: Execute the second command only if the first one
-		 * returns non zero.
+		 * returns non zero.   este cazul ||
 		 */
+		returned_value = parse_command(c->cmd1, level + 1, c);
+		// printf("First command || returned exit code: %d@\n", returned_value);
+		if (returned_value != 0) {
+			returned_value = parse_command(c->cmd2, level + 1, c);
+			// printf("Second command returned exit code: %d@\n", returned_value);
+		}
+
 		break;
 
 	case OP_CONDITIONAL_ZERO:
 		/* TODO: Execute the second command only if the first one
-		 * returns zero.
+		 * returns zero.    este cazul &&
 		 */
+		returned_value = parse_command(c->cmd1, level + 1, c);
+		// printf("First command && returned exit code: %d@\n", returned_value);
+		if (returned_value == 0) {
+			returned_value = parse_command(c->cmd2, level + 1, c);
+			// printf("Second command returned exit code: %d@\n", returned_value);
+
+		}
+
 		break;
 
 	case OP_PIPE:
 		/* TODO: Redirect the output of the first command to the
 		 * input of the second.
 		 */
+		returned_value = run_on_pipe(c->cmd1, c->cmd2, level + 1, c);
+
 		break;
 
 	default:
 		return SHELL_EXIT;
 	}
 
-	return 0; /* TODO: Replace with actual exit code of command. */
+	return returned_value; /* TODO: Replace with actual exit code of command. */
 }

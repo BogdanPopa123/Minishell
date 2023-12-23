@@ -11,6 +11,10 @@
 #define PROMPT             "> "
 #define CHUNK_SIZE         1024
 
+static int original_stdin;
+static int original_stdout;
+static int original_stderr;
+
 
 void parse_error(const char *str, const int where)
 {
@@ -66,8 +70,13 @@ static void start_shell(void)
 
 	int ret;
 
+	original_stdin = dup(0);
+	original_stdout = dup(1);
+	original_stderr = dup(2);
+
 	for (;;) {
-		printf(PROMPT);
+		// printf(PROMPT);
+		write(original_stdout, PROMPT, strlen(PROMPT));
 		fflush(stdout);
 		ret = 0;
 
