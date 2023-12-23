@@ -253,12 +253,7 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 		exec_result = execvpe(command, argv, __environ);
 
 		if (exec_result < 0) {
-			char *error_buffer = (char *) malloc(200);
-
-			strcpy(error_buffer, "Execution failed for \'");
-			strcat(error_buffer, command);
-			strcat(error_buffer, "\'\n");
-			write(2, error_buffer, strlen(error_buffer));
+			dprintf(2, "Execution failed for \'%s\'\n", command);
 			exit(-1);
 		}
 
@@ -331,7 +326,6 @@ static bool run_in_parallel(command_t *cmd1, command_t *cmd2, int level,
 			}
 			// return false;
 			return true;
-
 		}
 		return false;
 	}
@@ -409,7 +403,6 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 				}
 				// return false;
 				return true; //ca sa am exit code 1 adica executie esuata
-
 			}
 			return false;
 		}
