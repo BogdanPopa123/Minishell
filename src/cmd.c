@@ -238,12 +238,13 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 
 	if (strchr(command, '=') != 0 ) {
 
-		char *var_name = s->verb->string;
+		char *var_name = strdup(s->verb->string);
 		char *value = get_word(s->verb->next_part->next_part);
 
 		int return_value = setenv(var_name, value, 1);
 		
 		free(value);
+		free(var_name);
 		return return_value;
 	}
 
@@ -287,6 +288,16 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 
 		exec_result = execvpe(command, argv, __environ);
 
+		if (exec_result < 0) {
+			char* error_buffer = (char*) malloc(200);
+			strcpy(error_buffer, "Execution failed for \'");
+			strcat(error_buffer, command);
+			strcat(error_buffer, "\'\n");
+			write(2, error_buffer, strlen(error_buffer));
+			// fflush(2);
+			exit(-1);
+		}
+
 		exit(-1); //TODO SET CORRECT EXIT FLAG
 
 	} else if (pid > 0){
@@ -326,6 +337,43 @@ static bool run_in_parallel(command_t *cmd1, command_t *cmd2, int level,
 		command_t *father)
 {
 	/* TODO: Execute cmd1 and cmd2 simultaneously. */
+
+	int status1, status2;
+	int pid1, pid2;
+
+	pid1 = fork();
+
+	if (pid1 == 0){
+		//inside first child
+		parse_command(cmd1, level + 1, father);
+		exit(0);
+		
+	} else if (pid1 > 0){
+		// inside parent process
+		pid2 = fork();
+		
+		if (pid2 == 0) {
+			//inside second child
+			parse_command(cmd2, level + 1, father);
+			exit(0);
+		} else if (pid2 > 0) {
+			// inside parent
+			waitpid(pid1, &status1, 0);
+			waitpid(pid2, &status2, 0);
+
+			//returnarea false adica zero ar inseamna ca exit codeul indica executia cu succes
+			//voi face ceea ce este invers, adica in loc de true returnez false si viceversa (contraintuitiv)
+			if (WIFEXITED(status1) && WIFEXITED(status2)
+			&& WEXITSTATUS(status1) == 0 && WEXITSTATUS(status2) == 0) {
+				// return true;
+				return false;
+			} else {
+				// return false;
+				return true;
+			}
+		}
+		return false;
+	}
 
 	return true; /* TODO: Replace with actual exit status. */
 }
@@ -453,6 +501,8 @@ int parse_command(command_t *c, int level, command_t *father)
 
 	case OP_PARALLEL:
 		/* TODO: Execute the commands simultaneously. */
+
+		returned_value = run_in_parallel(c->cmd1, c->cmd2, level + 1, c);
 		break;
 
 	case OP_CONDITIONAL_NZERO:
