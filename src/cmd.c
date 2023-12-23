@@ -255,7 +255,7 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 		if (exec_result < 0) {
 			char *error_buffer = (char *) malloc(200);
 
-			strcpy(error_buffer, "Execution failed for \'", 23);
+			strcpy(error_buffer, "Execution failed for \'");
 			strcat(error_buffer, command);
 			strcat(error_buffer, "\'\n");
 			write(2, error_buffer, strlen(error_buffer));
