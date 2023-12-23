@@ -18,7 +18,7 @@
 
 #define READ		0
 #define WRITE		1
-#define ERROR 		2
+#define ERROR		2
 
 /**
  * Internal change-directory command.
@@ -27,8 +27,9 @@ extern int original_stdin;
 extern int original_stdout;
 extern int original_stderr;
 
-static void manage_redirections(simple_command_t *s, char *stdin, char* stdout, char* stderr,
-int *fd_in, int *fd_out, int *fd_err, int *fd_common_out) {
+static void manage_redirections(simple_command_t *s, char *stdin, char *stdout, char *stderr,
+int *fd_in, int *fd_out, int *fd_err, int *fd_common_out)
+{
 	if (stdin != NULL) {
 		*fd_in = open(stdin, O_RDONLY, 0777);
 		int dup_result = dup2((*fd_in), READ);
@@ -70,6 +71,7 @@ int *fd_in, int *fd_out, int *fd_err, int *fd_common_out) {
 				*fd_out = open(stdout, O_WRONLY | O_CREAT | O_TRUNC, 0777);
 
 				int dup_out_regular_result = dup2((*fd_out), WRITE);
+
 				if ((*fd_out) < 0 || dup_out_regular_result < 0) {
 					close((*fd_out));
 
@@ -106,6 +108,7 @@ int *fd_in, int *fd_out, int *fd_err, int *fd_common_out) {
 				*fd_err = open(stderr, O_WRONLY | O_CREAT | O_TRUNC, 0777);
 
 				int dup2_err_regular_result = dup2((*fd_err), ERROR);
+
 				if ((*fd_err) < 0 || dup2_err_regular_result < 0) {
 					close((*fd_err));
 
@@ -121,6 +124,7 @@ int *fd_in, int *fd_out, int *fd_err, int *fd_common_out) {
 				*fd_err = open(stderr, O_WRONLY | O_CREAT | O_APPEND, 0777);
 
 				int dup2_err_append_result = dup2((*fd_err), ERROR);
+
 				if ((*fd_err) < 0 || dup2_err_append_result < 0) {
 					close((*fd_err));
 
@@ -187,9 +191,9 @@ static int shell_exit(void)
 static int parse_simple(simple_command_t *s, int level, command_t *father)
 {
 	/* TODO: Sanity checks. */
-	if (s == NULL || level < 0) {
+	if (s == NULL || level < 0)
 		return SHELL_EXIT;
-	}
+
 
 	/* TODO: If builtin command, execute the command. */
 
@@ -234,6 +238,7 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 	char **argv = get_argv(s, &number_of_args);
 
 	int pid = fork();
+
 	if (pid == 0) {
 		//inside child process
 
@@ -248,7 +253,8 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 		exec_result = execvpe(command, argv, __environ);
 
 		if (exec_result < 0) {
-			char* error_buffer = (char*) malloc(200);
+			char *error_buffer = (char *) malloc(200);
+
 			strcpy(error_buffer, "Execution failed for \'");
 			strcat(error_buffer, command);
 			strcat(error_buffer, "\'\n");
@@ -258,24 +264,25 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 
 		exit(-1);
 
-	} else if (pid > 0){
+	} else if (pid > 0) {
 		//inside parent process
 		waitpid(pid, &child_exit_status, 0);
 
 		//free argv
 		int i;
-		for (i = 0; i < number_of_args; i ++){
+
+		for (i = 0; i < number_of_args; i++)
 			free(argv[i]);
-		}
+
 		free(argv);
 		free(command);
 		free(input);
 		free(output);
 		free(err);
 
-		if (WIFEXITED(child_exit_status)) {
+		if (WIFEXITED(child_exit_status))
 			return WEXITSTATUS(child_exit_status);
-		}
+
 
 		return -1;
 	}
@@ -297,12 +304,12 @@ static bool run_in_parallel(command_t *cmd1, command_t *cmd2, int level,
 
 	pid1 = fork();
 
-	if (pid1 == 0){
+	if (pid1 == 0) {
 		//inside first child
 		parse_command(cmd1, level + 1, father);
 		exit(0);
 
-	} else if (pid1 > 0){
+	} else if (pid1 > 0) {
 		// inside parent process
 		pid2 = fork();
 
@@ -321,10 +328,10 @@ static bool run_in_parallel(command_t *cmd1, command_t *cmd2, int level,
 			&& WEXITSTATUS(status1) == 0 && WEXITSTATUS(status2) == 0) {
 				// return true;
 				return false;
-			} else {
-				// return false;
-				return true;
 			}
+			// return false;
+			return true;
+
 		}
 		return false;
 	}
@@ -343,12 +350,12 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 	// File descriptorii pentru pipe
 	int pipe_fd[2];
 
-    int pid1, pid2;
-    int status1, status2;
+	int pid1, pid2;
+	int status1, status2;
 
-	if (pipe(pipe_fd) == -1) {
+	if (pipe(pipe_fd) == -1)
 		return false;
-	}
+
 
 	pid1 = fork();
 
@@ -357,26 +364,28 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 		close(pipe_fd[0]);
 
 		int dup2_first_res_pipe = dup2(pipe_fd[1], 1);
-		if (dup2_first_res_pipe < 0) {
+
+		if (dup2_first_res_pipe < 0)
 			exit(1);
-		}
+
 
 		int return_value = parse_command(cmd1, level + 1, father);
+
 		close(pipe_fd[1]);
 		exit(return_value);
 	} else {
 		//inside parent process
 
 		pid2 = fork();
-		if (pid2 == 0){
+		if (pid2 == 0) {
 			//inside second child (brother with p1)
 			close(pipe_fd[1]);
 
 			int dup2_second_res_pipe = dup2(pipe_fd[0], 0);
 
-			if (dup2_second_res_pipe < 0) {
+			if (dup2_second_res_pipe < 0)
 				exit(1);
-			}
+
 
 			int second_return_value = parse_command(cmd2, level + 1, father);
 
@@ -397,10 +406,10 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 				if (status2 == 0) {
 					// return true;
 					return false; //ca sa am exit code 0 adica executie cu succes
-				} else {
-					// return false;
-					return true; //ca sa am exit code 1 adica executie esuata
 				}
+				// return false;
+				return true; //ca sa am exit code 1 adica executie esuata
+
 			}
 			return false;
 		}
@@ -416,7 +425,7 @@ int parse_command(command_t *c, int level, command_t *father)
 {
 	/* TODO: sanity checks */
 
-	if(c == NULL || level < 0)
+	if (c == NULL || level < 0)
 		return SHELL_EXIT;
 
 
@@ -456,9 +465,9 @@ int parse_command(command_t *c, int level, command_t *father)
 		 */
 		returned_value = parse_command(c->cmd1, level + 1, c);
 
-		if (returned_value != 0) {
+		if (returned_value != 0)
 			returned_value = parse_command(c->cmd2, level + 1, c);
-		}
+
 
 		break;
 
