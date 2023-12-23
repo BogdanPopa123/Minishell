@@ -29,7 +29,6 @@ extern int original_stderr;
 
 static void manage_redirections(simple_command_t *s, char *stdin, char* stdout, char* stderr,
 int *fd_in, int *fd_out, int *fd_err, int *fd_common_out) {
-
 	if (stdin != NULL) {
 		*fd_in = open(stdin, O_RDONLY, 0777);
 		int dup_result = dup2((*fd_in), READ);
@@ -146,7 +145,6 @@ static bool shell_cd(word_t *dir)
 
 
 	if (arg_path == NULL || strlen(arg_path) == 0) {
-
 		// daca dam comanda cd fara niciun argument vrem sa mergem in HOME ~
 		char *home_dest = getenv("HOME");
 
@@ -162,7 +160,7 @@ static bool shell_cd(word_t *dir)
 	}
 
 	free(arg_path);
-	
+
 	return return_value;
 }
 
@@ -206,7 +204,6 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 		manage_redirections(s, input, output, err, &fd_input, &fd_output, &fd_error, &fd_common_out_error);
 		return shell_cd(s->params);
 	} else if (strcmp(command, "quit") == 0 || strcmp(command, "exit") == 0) {
-
 		return shell_exit();
 	}
 	/* TODO: If variable assignment, execute the assignment and return
@@ -341,7 +338,7 @@ static bool run_in_parallel(command_t *cmd1, command_t *cmd2, int level,
 static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 		command_t *father)
 {
-	/* TODO: Redirect the output of cmd1 to the input of cmd2. este cazul | */  
+	/* TODO: Redirect the output of cmd1 to the input of cmd2. este cazul | */
 
 	// File descriptorii pentru pipe
 	int pipe_fd[2];
@@ -382,7 +379,7 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 			}
 
 			int second_return_value = parse_command(cmd2, level + 1, father);
-			
+
 			close(pipe_fd[0]);
 
 			exit(second_return_value);
@@ -419,9 +416,9 @@ int parse_command(command_t *c, int level, command_t *father)
 {
 	/* TODO: sanity checks */
 
-	if(c == NULL || level < 0) {
+	if(c == NULL || level < 0)
 		return SHELL_EXIT;
-	}
+
 
 	int returned_value;
 
@@ -439,11 +436,11 @@ int parse_command(command_t *c, int level, command_t *father)
 		returned_value = parse_command(c->cmd1, level + 1, c);
 		int second_return_value = parse_command(c->cmd2, level + 1, c);
 
-		if (returned_value == 0 || second_return_value == 0) {
+		if (returned_value == 0 || second_return_value == 0)
 			returned_value = 0;
-		} else {
+		else
 			returned_value = -1;
-		}
+
 
 		break;
 
@@ -458,7 +455,7 @@ int parse_command(command_t *c, int level, command_t *father)
 		 * returns non zero.   este cazul ||
 		 */
 		returned_value = parse_command(c->cmd1, level + 1, c);
-		
+
 		if (returned_value != 0) {
 			returned_value = parse_command(c->cmd2, level + 1, c);
 		}
@@ -470,10 +467,10 @@ int parse_command(command_t *c, int level, command_t *father)
 		 * returns zero.    este cazul &&
 		 */
 		returned_value = parse_command(c->cmd1, level + 1, c);
-		
-		if (returned_value == 0) {
+
+		if (returned_value == 0)
 			returned_value = parse_command(c->cmd2, level + 1, c);
-		}
+
 
 		break;
 
