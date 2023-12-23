@@ -76,7 +76,6 @@ static void start_shell(void)
 	original_stderr = dup(2);
 
 	for (;;) {
-		// printf(PROMPT);
 		write(original_stdout, PROMPT, strlen(PROMPT));
 		fflush(stdout);
 		ret = 0;
@@ -90,7 +89,6 @@ static void start_shell(void)
 		if (root != NULL)
 			ret = parse_command(root, 0, NULL);
 
-		// print("ret value in infinite loop: %d@\n")
 		free_parse_memory();
 		free(line);
 
